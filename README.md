@@ -85,9 +85,23 @@ docker compose -f docker-compose.build.yml up -d --build
 
 首次构建 3–5 分钟（拉基础镜像 + 下载 Kindling 转换引擎）。想改代码、二次开发走这条路。
 
-### 拉不动 ghcr.io？换加速地址
+### 拉不动 ghcr.io？换地址
 
-镜像内容完全一样，只是换个域名前缀。加速拉下来之后 retag 一下，原来的命令照旧能用。
+镜像同时发布在两个仓库，内容完全一样，哪个快用哪个：
+
+| 仓库 | 地址 |
+|---|---|
+| GitHub Container Registry | `ghcr.io/m964927/send-to-kindle:latest` |
+| Docker Hub | `docker.io/song19615/send-to-kindle:latest`（可简写 `song19615/send-to-kindle`） |
+
+两个都是公开镜像，不需要登录。国内访问 Docker Hub 通常比 ghcr.io 顺畅，先用它试：
+
+```bash
+docker pull docker.io/song19615/send-to-kindle:latest
+docker tag  docker.io/song19615/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
+```
+
+都不行就用下面的加速前缀，retag 之后原来的命令照旧能用。
 
 **毫秒镜像（1ms.run）**：需要在 [1ms.run](https://1ms.run/) 注册并创建 Docker 密钥，免费额度就够用。
 
