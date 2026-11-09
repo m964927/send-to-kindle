@@ -1,0 +1,29 @@
+{
+  "name": "kindle-drop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "自托管的电子书投递站：手机/电脑上传，Kindle 浏览器直接下载，EPUB 自动转 AZW3",
+  "license": "MIT",
+  "main": "server.js",
+  "keywords": [
+    "kindle",
+    "ebook",
+    "epub",
+    "azw3",
+    "self-hosted",
+    "docker"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "express": "^4.22.3",
+    "qrcode": "^1.5.4"
+  }
+}

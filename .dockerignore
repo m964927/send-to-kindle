@@ -1,0 +1,19 @@
+# 依赖由 npm ci 在镜像内安装
+node_modules
+
+# 本地数据
+data
+
+# tools/ 只把「构建自检用的样本」和「离线转换引擎」带进镜像；
+# Windows 用的 kindling.exe、570MB 的 Calibre 一概不传
+tools/*
+!tools/sample.epub
+!tools/kindling-linux
+
+.git
+.gitignore
+*.log
+启动.bat
+转换.bat
+README.md
+docker-compose.yml

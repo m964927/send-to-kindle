@@ -1,0 +1,19 @@
+# 统一换行符，避免 Windows 上改过的脚本在 Linux 上跑不起来
+* text=auto
+
+# Windows 批处理必须是 CRLF，否则 cmd 解析出错
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell 脚本必须保持 LF
+*.sh  text eol=lf
+
+# 二进制：不能被当成文本转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.epub binary
+*.mobi binary
+*.azw3 binary

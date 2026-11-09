@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f6f3">
+<title>Kindle 投递站</title>
+<style>
+  :root {
+    --paper: #f7f6f3;
+    --card: #ffffff;
+    --ink: #17181c;
+    --muted: #6d6e78;
+    --faint: #9a9ba4;
+    --line: #e7e5df;
+    --accent: #1f5f4b;
+    --accent-soft: #eaf3ef;
+    --warn: #a35a12;
+    --warn-soft: #fdf3e7;
+    --danger: #b23c3c;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 20px 64px;
+  }
+  h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -.01em; }
+  a { color: inherit; }
+  button { font-family: inherit; }
+
+  .shell { max-width: 1080px; margin: 0 auto; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 28px 0 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+  .logo {
+    width: 42px; height: 42px; flex: none; border-radius: 12px;
+    background: linear-gradient(160deg, #23252b, #101114);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 19px; font-weight: 700; letter-spacing: .02em;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  .brand h1 { font-size: 19px; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 12px; border-radius: 999px;
+    background: #fff; border: 1px solid var(--line);
+    font-size: 12.5px; color: var(--muted); white-space: nowrap;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+  .dot.ok { background: #2f9e6b; box-shadow: 0 0 0 3px rgba(47,158,107,.14); }
+  .dot.warn { background: #d98b27; box-shadow: 0 0 0 3px rgba(217,139,39,.14); }
+
+  .top-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+  /* 直接进书架：Kindle 上打开本页时最需要的入口，做成实心按钮 */
+  .btn.jump {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+    white-space: nowrap; padding: 9px 15px;
+  }
+  .btn.jump:hover { opacity: 1; background: #1a5140; border-color: #1a5140; }
+
+  /* ---------- 布局 ---------- */
+  .grid { display: grid; grid-template-columns: 1.25fr .95fr; gap: 18px; align-items: start; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px;
+  }
+  .card > h2 { font-size: 15px; margin-bottom: 14px; }
+  .section-gap { margin-top: 18px; }
+
+  /* ---------- 上传 ---------- */
+  .drop {
+    border: 1.5px dashed #d5d2ca; border-radius: 12px;
+    padding: 30px 18px; text-align: center; cursor: pointer;
+    background: #fcfbf9;
+    transition: border-color .16s, background .16s, transform .16s;
+  }
+  .drop:hover { border-color: #b9b5ab; background: #fbfaf7; }
+  .drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .drop-ico {
+    width: 40px; height: 40px; margin: 0 auto 10px; border-radius: 50%;
+    background: #f1efe9; color: #45464d;
+    display: flex; align-items: center; justify-content: center; font-size: 19px;
+  }
+  .drop-title { margin: 0; font-size: 15px; font-weight: 600; }
+  .drop-title .link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .drop-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--faint); }
+  #picker { display: none; }
+
+  .hints { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; display: flex; flex-direction: column; gap: 10px; }
+  .hint { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: #55565e; line-height: 1.5; }
+  .hd { width: 6px; height: 6px; border-radius: 50%; margin-top: 6px; flex: none; background: #b9b6ae; }
+  .hd.ok { background: #2f9e6b; }
+  .hd.conv { background: #4a7fb5; }
+  .hd.warn { background: #d98b27; }
+
+  .queue { margin-top: 14px; display: none; flex-direction: column; gap: 9px; }  .queue.on { display: flex; }
+  .q-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+  .q-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+  .q-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-state { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .bar { height: 4px; border-radius: 4px; background: #eeebe4; margin-top: 8px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .q-item.err .bar > i { background: var(--danger); }
+  .q-item.err .q-state { color: var(--danger); }
+  .q-item.dup .bar > i { background: #b8860b; }
+  .q-item.dup .q-state { color: #8a6d00; }
+
+  /* ---------- 访问 ---------- */
+  .urlbox {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: #fbfaf7; padding: 11px 12px;
+  }
+  .urlbox code {
+    flex: 1; min-width: 0;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; color: #2b2c33; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mini {
+    border: 1px solid var(--line); background: #fff; color: #3c3d44;
+    border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer;
+  }
+  .mini:hover { background: #f4f2ed; }
+
+  .steps { margin: 14px 0 0; padding-left: 18px; color: #45464d; font-size: 13.5px; }
+  .steps li { margin: 6px 0; }
+
+  .alts { margin-top: 8px; font-size: 12px; color: var(--faint); line-height: 1.9; }
+  .alts a { color: #4a4b52; text-decoration: none; border-bottom: 1px dashed #d3d0c8; margin-right: 10px; }
+  .alts a:hover { color: var(--accent); border-color: var(--accent); }
+
+  .qr-row { display: flex; gap: 14px; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .qr-row img {
+    width: 84px; height: 84px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; padding: 5px; flex: none;
+  }
+  .qr-row .t { font-size: 13.5px; font-weight: 600; }
+  .qr-row .m { font-size: 12.5px; color: var(--muted); margin: 3px 0 0; }
+
+  details.engine { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  details.engine > summary {
+    cursor: pointer; font-size: 12.5px; color: var(--muted); list-style: none;
+    display: flex; align-items: center; gap: 7px;
+  }
+  details.engine > summary::-webkit-details-marker { display: none; }
+  details.engine > summary::after { content: "▾"; font-size: 10px; color: var(--faint); }
+  details.engine[open] > summary::after { content: "▴"; }
+  .engine-body { padding-top: 12px; }
+  .field { display: block; margin-bottom: 9px; }
+  .field > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .field input[type=text] {
+    width: 100%; padding: 9px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+  }
+  .field input[type=text]:focus { outline: 2px solid #d8e5df; border-color: #b9cfc6; }
+  .row-inline { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 4px; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #4a4b52; cursor: pointer; }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
+    border: 1px solid var(--ink); background: var(--ink); color: #fff;
+    border-radius: 9px; padding: 9px 16px; font-size: 13.5px; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    transition: opacity .15s, background .15s;
+  }
+  .btn:hover { opacity: .88; }
+  .btn.ghost { background: #fff; color: #2b2c33; border-color: #dcd9d2; }
+  .btn.ghost:hover { background: #f6f4ef; }
+  .btn.small { padding: 6px 11px; font-size: 12.5px; border-radius: 8px; }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .icon-btn {
+    border: none; background: transparent; color: var(--faint);
+    font-size: 12.5px; cursor: pointer; padding: 5px 7px; border-radius: 7px;
+  }
+  .icon-btn:hover { background: #f4f2ed; color: var(--danger); }
+
+  /* ---------- 书库 ---------- */
+  .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+  .lib-head h2 { font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .pill { background: #f1efe9; color: #55565e; font-size: 12px; padding: 1px 8px; border-radius: 999px; font-weight: 500; }
+  .search-wrap { position: relative; }
+  #search {
+    width: 210px; max-width: 46vw; padding: 8px 12px 8px 31px;
+    border: 1px solid var(--line); border-radius: 9px; background: #fbfaf8;
+    font-size: 13px; font-family: inherit; color: var(--ink);
+  }
+  #search:focus { outline: 2px solid #d8e5df; border-color: #b9cfc6; background: #fff; }
+  .search-wrap::before {
+    content: "⌕"; position: absolute; left: 10px; top: 50%; transform: translateY(-52%);
+    color: var(--faint); font-size: 15px; pointer-events: none;
+  }
+
+  .list { margin-top: 12px; border-top: 1px solid var(--line); }
+  .row {
+    display: flex; align-items: center; gap: 13px;
+    padding: 13px 2px; border-bottom: 1px solid var(--line);
+  }
+  .row:last-child { border-bottom: none; }
+  .fmt {
+    flex: none; width: 52px; height: 38px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+    background: #f1efe9; color: #55565e;
+  }
+  .fmt.k { background: var(--accent-soft); color: var(--accent); }
+  .fmt.w { background: var(--warn-soft); color: var(--warn); }
+  .row .main { flex: 1; min-width: 0; }
+  .row .name {
+    font-size: 14px; font-weight: 550; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .sub { font-size: 12px; color: var(--faint); margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 5px; background: #f3f1ec; color: #6d6e78; }
+  .tag.ok { background: var(--accent-soft); color: var(--accent); }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  .row .acts { display: flex; align-items: center; gap: 4px; flex: none; }
+  .thin-bar { height: 3px; border-radius: 3px; background: #eeebe4; overflow: hidden; margin-top: 7px; }
+  .thin-bar > i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+
+  .empty-state { padding: 46px 0; text-align: center; color: var(--faint); font-size: 13.5px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 12px);
+    background: #1c1d22; color: #fff; font-size: 13px;
+    padding: 10px 18px; border-radius: 999px; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; z-index: 50; max-width: 86vw;
+  }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+  .toast.err { background: var(--danger); }
+
+  @media (max-width: 860px) {
+    body { padding: 0 14px 56px; overflow-x: hidden; }
+    .grid { grid-template-columns: 1fr; }
+    .topbar { padding: 20px 0 16px; gap: 10px; flex-wrap: wrap; }
+    .brand p { display: none; }
+    .chip { font-size: 12px; padding: 6px 10px; }
+    .top-actions { gap: 8px; margin-left: auto; }
+    .btn.jump { padding: 9px 13px; font-size: 13px; }
+    .card { padding: 18px; border-radius: 12px; }
+    .row .acts .dl-text { display: none; }
+    #search { width: 150px; }
+    .drop { padding: 26px 14px; }
+  }
+  @media (max-width: 620px) {
+    /* 窄屏优先保证「去书架下载」按钮够大、不被挤掉，转换引擎状态在下方详情里也有 */
+    .top-actions .chip { display: none; }
+    .top-actions { width: 100%; margin-left: 0; }
+    .btn.jump { flex: 1; justify-content: center; padding: 11px 14px; font-size: 14px; }
+  }
+  @media (max-width: 400px) {
+    .brand h1 { font-size: 17px; }
+    .logo { width: 38px; height: 38px; font-size: 17px; }
+    .chip { padding: 5px 9px; font-size: 11.5px; }
+    .drop-hint { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">K</div>
+      <div>
+        <h1>Kindle 投递站</h1>
+        <p>上传电子书，在 Kindle 上点一下就能下载</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="chip" id="engineChip"><span class="dot" id="engineDot"></span><span id="engineText">检测中…</span></div>
+      <a class="btn jump" id="toShelf" href="/k">去书架下载 →</a>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- 上传 -->
+    <section class="card">
+      <h2>上传电子书</h2>
+      <div class="drop" id="drop">
+        <div class="drop-ico">↑</div>
+        <p class="drop-title">拖拽文件到此处，或 <span class="link">点击选择</span></p>
+        <p class="drop-hint">EPUB / MOBI / AZW3 / AZW / PDF / TXT · 支持多选</p>
+      </div>
+      <input type="file" id="picker" multiple accept=".epub,.mobi,.azw3,.azw,.pdf,.txt,.kfx">
+      <div class="queue" id="queue"></div>
+
+      <div class="hints">
+        <div class="hint"><i class="hd ok"></i><span>AZW3 / MOBI / AZW 直接下载，Oasis 2 排版最佳</span></div>
+        <div class="hint"><i class="hd conv" id="hintEpubDot"></i><span id="hintEpub">EPUB 上传后自动转成 AZW3，两个版本都保留</span></div>
+        <div class="hint"><i class="hd warn"></i><span>PDF / TXT 能读，但排版和小字体体验一般</span></div>
+      </div>
+    </section>
+
+    <!-- Kindle 访问方式 -->
+    <aside class="card">
+      <h2>在 Kindle 上打开</h2>
+      <div class="urlbox">
+        <code id="kindleUrl">http://…</code>
+        <button class="mini" id="copyKindle">复制</button>
+      </div>
+      <div class="alts" id="alts"></div>
+      <ol class="steps">
+        <li>Kindle 能访问到这个地址（同一 Wi-Fi，或经反向代理的公网域名）</li>
+        <li>打开 Kindle 的「体验版网页浏览器」，输入上面的地址</li>
+        <li>点书名右侧的「下载到 Kindle」，完成后会出现在图书馆</li>
+      </ol>
+
+      <div class="qr-row">
+        <img id="qr" alt="手机上传二维码">
+        <div>
+          <div class="t">手机扫码上传</div>
+          <p class="m">扫码即可打开上传页（需与服务器网络互通）</p>
+        </div>
+      </div>
+
+      <details class="engine">
+        <summary><span class="dot" id="engineDot2"></span><span id="engineText2">格式转换引擎</span></summary>
+        <div class="engine-body">
+          <label class="field">
+            <span>转换引擎路径（留空自动查找，Kindling 或 Calibre 均可）</span>
+            <input type="text" id="enginePath" placeholder="留空即可，通常不需要填">
+          </label>
+          <div class="row-inline">
+            <button class="btn small" id="savePath">保存并重新检测</button>
+            <label class="chk"><input type="checkbox" id="autoConvert"> EPUB 自动转 AZW3</label>
+          </div>
+        </div>
+      </details>
+    </aside>
+  </main>
+
+  <!-- 书库 -->
+  <section class="card section-gap">
+    <div class="lib-head">
+      <h2>书库 <span class="pill" id="count">0</span></h2>
+      <div class="search-wrap"><input id="search" type="search" placeholder="搜索书名或文件名"></div>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var state = { files: [], info: null, pollTimer: null, query: '' };
+  var $ = function (id) { return document.getElementById(id); };
+
+  var FMT_CLASS = { azw3: 'k', mobi: 'k', azw: 'k', epub: 'w' };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function toast(msg, isErr) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.className = 'toast on' + (isErr ? ' err' : '');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.className = 'toast'; }, 2600);
+  }
+
+  function relTime(ts) {
+    if (!ts) return '';
+    var diff = Date.now() - ts;
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+    var d = new Date(ts);
+    var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    if (diff < 86400000) return '今天 ' + hm;
+    return (d.getMonth() + 1) + '-' + d.getDate() + ' ' + hm;
+  }
+
+  /* ---------- 服务信息 ---------- */
+  function loadInfo() {
+    return fetch('/api/info').then(function (r) { return r.json(); }).then(function (info) {
+      state.info = info;
+      var base = pickBase(info);
+      setAccess(base);
+      renderAlts(info.urls, base);
+      $('enginePath').value = info.config.kindlingPath || info.config.calibrePath || '';
+      $('autoConvert').checked = !!info.config.autoConvert;
+      paintEngine(info.engine || info.calibre);
+      return info;
+    });
+  }
+
+  function setAccess(base) {
+    $('kindleUrl').textContent = base + '/k';
+    $('qr').src = '/api/qr?text=' + encodeURIComponent(base);
+  }
+
+  function isLoopbackHost(h) {
+    return /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(h || '');
+  }
+
+  // 页面上显示的访问地址，按这个顺序决定：
+  // 1. 配置了 PUBLIC_URL 就用它（强制覆盖，一般不用配）
+  // 2. 用域名或局域网 IP 访问时，跟着当前地址走 —— 反向代理换了域名也自动正确
+  // 3. 用 127.0.0.1 打开时，Kindle 打不通回环地址，退回服务器报的局域网 IP
+  function pickBase(info) {
+    var forced = ((info.config && info.config.publicUrl) || '').replace(/\/+$/, '');
+    // 配成 127.0.0.1 的 PUBLIC_URL 对 Kindle 没意义，当它没配
+    if (forced && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(forced)) return forced;
+
+    var here = location.protocol + '//' + location.host;
+    if (!isLoopbackHost(location.host)) return here;
+
+    var lan = (info.urls.all || []).filter(function (u) {
+      return !/\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(u);
+    });
+    return lan[0] || here;
+  }
+
+  function renderAlts(urls, base) {
+    var rest = (urls.all || []).filter(function (u) {
+      if (u === base) return false;
+      if (/\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(u)) return false;
+      // 容器里的 172.17–172.31 是 Docker 网桥，Kindle 连不上
+      if (/^http:\/\/172\.(1[7-9]|2\d|3[01])\./.test(u)) return false;
+      return true;
+    });
+    $('alts').innerHTML = rest.length
+      ? 'Kindle 打不开？换个网卡地址：' + rest.map(function (u) {
+          return '<a href="#" data-base="' + esc(u) + '">' + esc(u.replace(/^https?:\/\//, '')) + '</a>';
+        }).join('')
+      : '';
+  }
+
+  function paintEngine(engine) {
+    var ok = engine && engine.available;
+    $('engineDot').className = 'dot ' + (ok ? 'ok' : 'warn');
+    $('engineDot2').className = 'dot ' + (ok ? 'ok' : 'warn');
+    $('engineText').textContent = ok ? (engine.name || '转换引擎') + ' ' + engine.version + ' 就绪' : '未检测到转换引擎';
+    $('engineText2').textContent = ok ? '转换引擎正常' : '转换引擎缺失（EPUB 无法转换）';
+
+    // 没有转换引擎时，别让格式提示继续承诺“自动转”
+    var hint = $('hintEpub');
+    if (hint) {
+      hint.textContent = ok
+        ? 'EPUB 上传后自动转成 AZW3，两个版本都保留'
+        : 'EPUB 无法在服务器转换，请先用「转换.bat」转成 AZW3 再上传';
+      $('hintEpubDot').className = 'hd ' + (ok ? 'conv' : 'warn');
+    }
+  }
+
+  /* ---------- 书库渲染 ---------- */
+  function loadFiles() {
+    return fetch('/api/files').then(function (r) { return r.json(); }).then(function (data) {
+      state.files = data.files;
+      render();
+      return data.files;
+    });
+  }
+
+  function render() {
+    var q = state.query.trim().toLowerCase();
+    var list = state.files.filter(function (f) {
+      return !q || (f.title + ' ' + f.originalName).toLowerCase().indexOf(q) !== -1;
+    });
+    $('count').textContent = state.files.length;
+
+    if (!list.length) {
+      $('list').innerHTML = '<div class="empty-state">' +
+        (state.files.length ? '没有匹配的书' : '还没有上传任何电子书') + '</div>';
+      return;
+    }
+
+    $('list').innerHTML = list.map(function (f) {
+      var cls = FMT_CLASS[f.format] || '';
+      var label = (f.format || '').toUpperCase();
+      var converting = f.status === 'converting';
+      var failed = f.status === 'failed';
+      var pending = f.status === 'pending';
+
+      var tag = '';
+      if (converting) {
+        tag = '<span class="tag">转换中 ' + (f.progress || 0) + '%</span>';
+      } else if (failed) {
+        tag = '<span class="tag warn">转换失败</span>';
+      } else if (pending) {
+        tag = '<span class="tag warn">待转换</span>';
+      } else if (f.kindleReady) {
+        tag = '<span class="tag ok">Kindle 可读</span>';
+      } else {
+        tag = '<span class="tag warn">Kindle 不支持</span>';
+      }
+
+      var bar = converting
+        ? '<div class="thin-bar"><i style="width:' + (f.progress || 0) + '%"></i></div>'
+        : '';
+
+      var actions;
+      if (converting) {
+        actions = '<button class="btn ghost small" disabled>转换中</button>';
+      } else if (failed || pending) {
+        actions = '<button class="btn ghost small" data-convert="' + f.id + '">转 AZW3</button>' +
+                  '<button class="icon-btn" data-del="' + f.id + '" title="删除">删除</button>';
+      } else {
+        actions = '<a class="btn ghost small" href="' + f.href + '" download>' +
+                    '<span class="dl-text">下载</span><span aria-hidden="true">↓</span></a>' +
+                  '<button class="icon-btn" data-del="' + f.id + '" title="删除">删除</button>';
+      }
+
+      return '<div class="row">' +
+        '<div class="fmt ' + cls + '">' + esc(label || '?') + '</div>' +
+        '<div class="main">' +
+          '<div class="name" title="' + esc(f.originalName) + '">' + esc(f.title) + '</div>' +
+          '<div class="sub">' + esc(f.sizeLabel) + ' · ' + relTime(f.createdAt) + ' ' + tag + '</div>' +
+          bar +
+        '</div>' +
+        '<div class="acts">' + actions + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ---------- 上传 ---------- */
+  function addQueueItem(name) {
+    var el = document.createElement('div');
+    el.className = 'q-item';
+    el.innerHTML = '<div class="q-top"><span class="q-name">' + esc(name) +
+      '</span><span class="q-state">等待中</span></div><div class="bar"><i></i></div>';
+    $('queue').classList.add('on');
+    $('queue').appendChild(el);
+    return el;
+  }
+
+  function uploadOne(file, item) {
+    return new Promise(function (resolve) {
+      var bar = item.querySelector('.bar > i');
+      var st = item.querySelector('.q-state');
+      var fd = new FormData();
+      fd.append('file', file, file.name);
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload', true);
+
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) {
+          var pct = Math.round((e.loaded / e.total) * 100);
+          bar.style.width = pct + '%';
+          st.textContent = pct < 100 ? '上传中 ' + pct + '%' : '处理中…';
+        }
+      };
+
+      xhr.onload = function () {
+        var res = {};
+        try { res = JSON.parse(xhr.responseText); } catch (e) {}
+        if (xhr.status === 200 && !(res.errors && res.errors.length)) {
+          bar.style.width = '100%';
+          if (res.duplicates && res.duplicates.length) {
+            item.classList.add('dup');
+            st.textContent = '内容重复，已跳过';
+          } else {
+            st.textContent = '已完成';
+          }
+          setTimeout(function () { item.style.display = 'none'; }, 1400);
+        } else {
+          item.classList.add('err');
+          st.textContent = (res.errors && res.errors[0]) || ('上传失败 ' + xhr.status);
+        }
+        resolve();
+      };
+
+      xhr.onerror = function () {
+        item.classList.add('err');
+        st.textContent = '网络错误';
+        resolve();
+      };
+
+      xhr.send(fd);
+    });
+  }
+
+  function handleFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList || []);
+    if (!files.length) return;
+
+    var ok = files.filter(function (f) { return f.size > 0; });
+    if (!ok.length) return toast('文件为空', true);
+
+    var chain = Promise.resolve();
+    ok.forEach(function (f) {
+      chain = chain.then(function () {
+        var item = addQueueItem(f.name);
+        return uploadOne(f, item);
+      });
+    });
+
+    chain.then(function () {
+      return loadFiles();
+    }).then(function (files) {
+      if (files.some(function (f) { return f.status === 'converting'; })) {
+        toast('已上传，正在转换格式…');
+        startPolling();
+      } else {
+        toast('上传完成');
+      }
+    });
+  }
+
+  /* ---------- 轮询转换状态 ---------- */
+  function startPolling() {
+    if (state.pollTimer) return;
+    var started = Date.now();
+    state.pollTimer = setInterval(function () {
+      loadFiles().then(function (files) {
+        var busy = files.some(function (f) { return f.status === 'converting'; });
+        if (!busy || Date.now() - started > 5 * 60 * 1000) {
+          clearInterval(state.pollTimer);
+          state.pollTimer = null;
+          if (!busy) toast('格式转换完成');
+        }
+      });
+    }, 1500);
+  }
+
+  /* ---------- 事件 ---------- */
+  var drop = $('drop');
+  $('picker').addEventListener('change', function (e) {
+    handleFiles(e.target.files);
+    e.target.value = '';
+  });
+  drop.addEventListener('click', function () { $('picker').click(); });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      drop.classList.add('drag');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) {
+      e.preventDefault(); e.stopPropagation();
+      if (ev === 'dragleave' && drop.contains(e.relatedTarget)) return;
+      drop.classList.remove('drag');
+    });
+  });
+  drop.addEventListener('drop', function (e) {
+    if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+  });
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+  $('search').addEventListener('input', function (e) {
+    state.query = e.target.value;
+    render();
+  });
+
+  $('list').addEventListener('click', function (e) {
+    var del = e.target.closest('[data-del]');
+    var conv = e.target.closest('[data-convert]');
+
+    if (del) {
+      var id = del.getAttribute('data-del');
+      if (!confirm('确定从服务器删除这本书？')) return;
+      fetch('/api/files/' + id, { method: 'DELETE' }).then(function () {
+        toast('已删除');
+        return loadFiles();
+      });
+      return;
+    }
+
+    if (conv) {
+      var cid = conv.getAttribute('data-convert');
+      conv.disabled = true;
+      conv.textContent = '转换中';
+      fetch('/api/files/' + cid + '/convert', { method: 'POST' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) {
+            toast(res.j.error || '转换启动失败', true);
+            loadFiles();
+            return;
+          }
+          loadFiles();
+          startPolling();
+        });
+    }
+  });
+
+  $('alts').addEventListener('click', function (e) {
+    var a = e.target.closest('[data-base]');
+    if (!a) return;
+    e.preventDefault();
+    var base = a.getAttribute('data-base');
+    setAccess(base);
+    toast('地址已切换为 ' + base.replace('http://', ''));
+  });
+
+  $('copyKindle').addEventListener('click', function () {
+    var text = $('kindleUrl').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('已复制地址'); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      toast('已复制地址');
+    }
+  });
+
+  $('savePath').addEventListener('click', function () {
+    var path = $('enginePath').value.trim();
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enginePath: path })
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      var eng = res.engine || res.calibre || {};
+      paintEngine(eng);
+      toast(eng.available ? '已找到 ' + (eng.name || '转换引擎') + ' ' + eng.version : '仍未找到，请检查路径', !eng.available);
+    });
+  });
+
+  $('autoConvert').addEventListener('change', function (e) {
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoConvert: e.target.checked })
+    }).then(function () { toast(e.target.checked ? '已开启自动转换' : '已关闭自动转换'); });
+  });
+
+  /* ---------- 初始化 ---------- */
+  loadInfo().catch(function () { toast('无法连接服务', true); });
+  loadFiles().then(function (files) {
+    if (files.some(function (f) { return f.status === 'converting'; })) startPolling();
+  });
+})();
+</script>
+</body>
+</html>
