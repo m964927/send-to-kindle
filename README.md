@@ -34,8 +34,8 @@
 ### Docker（推荐）
 
 ```bash
-git clone https://github.com/<your-name>/kindle-drop.git
-cd kindle-drop
+git clone https://github.com/m964927/send-to-kindle.git
+cd send-to-kindle
 docker compose up -d --build
 ```
 
