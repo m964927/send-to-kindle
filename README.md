@@ -58,7 +58,7 @@ npm install
 npm start
 ```
 
-转换引擎二选一：把 `kindling` 放进 `tools/`，或装好 Calibre（启动时自动查找）。
+转换引擎二选一：把对应平台的 kindling 放进 `tools/`（[releases](https://github.com/ciscoriordan/kindling/releases) 提供 linux / mac / windows 三个版本），或装好 Calibre（启动时自动查找）。
 
 ## 配置
 
