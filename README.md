@@ -186,8 +186,16 @@ Dockerfile         两阶段体积优化，构建时真转一本书自检
 A self-hosted e-book drop for e-ink readers: upload from phone/desktop, then open the page in the Kindle browser and tap to download. EPUB is converted to AZW3 automatically with [Kindling](https://github.com/ciscoriordan/kindling) (17MB, no Calibre needed).
 
 ```bash
-docker compose up -d --build   # then open http://<host>:8899
+# pull the prebuilt image (linux/amd64, ~88 MB compressed) and run
+docker run -d --name kindle-drop --restart unless-stopped \
+  -p 8899:8899 -e TZ=Asia/Shanghai \
+  -v "$PWD/data:/app/data" \
+  ghcr.io/m964927/send-to-kindle:latest
 ```
+
+Or drop [`docker-compose.yml`](docker-compose.yml) into a folder and run `docker compose up -d`. The image ships on GHCR only — Docker Hub is not used.
+
+Building from source (for development): `docker compose -f docker-compose.build.yml up -d --build`.
 
 No auth, no database, no cloud — everything lives in `./data`. **LAN use only**; put an authenticating reverse proxy in front if you expose it.
 
