@@ -47,5 +47,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # 关掉 provenance attestation：否则镜像索引里会多一个 unknown/unknown 条目，
+          # 群晖/威联通上较老的 Docker（20.10 等）拉取时会报 no matching manifest
+          provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
