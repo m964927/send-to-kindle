@@ -85,14 +85,26 @@ docker compose -f docker-compose.build.yml up -d --build
 
 首次构建 3–5 分钟（拉基础镜像 + 下载 Kindling 转换引擎）。想改代码、二次开发走这条路。
 
-> **拉不动 ghcr.io？** 国内直连经常超时，在地址前加加速前缀即可，其余部分不变：
->
-> ```bash
-> docker pull docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
-> docker tag docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
-> ```
->
-> compose 文件里直接把 `image:` 那一行换成带前缀的地址也行。
+### 拉不动 ghcr.io？换加速地址
+
+镜像内容完全一样，只是换个域名前缀。加速拉下来之后 retag 一下，原来的命令照旧能用。
+
+**毫秒镜像（1ms.run）**：需要在 [1ms.run](https://1ms.run/) 注册并创建 Docker 密钥，免费额度就够用。
+
+```bash
+docker login ghcr.1ms.run -u 1ms     # 密码填用户中心里 mk- 开头的密钥，登录一次即可
+docker pull ghcr.1ms.run/m964927/send-to-kindle:latest
+docker tag  ghcr.1ms.run/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
+```
+
+**免注册的公共前缀**（速度不保证，能用就行）：
+
+```bash
+docker pull docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
+docker tag  docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
+```
+
+compose 文件里也可以直接把 `image:` 换成加速地址，不写 tag 默认就是 `latest`。
 
 ### 直接跑（需要 Node.js 22+）
 

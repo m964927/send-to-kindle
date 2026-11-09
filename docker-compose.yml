@@ -12,6 +12,9 @@
 services:
   kindle-drop:
     image: ghcr.io/m964927/send-to-kindle:latest
+    # 国内拉不动 ghcr.io 时，换成加速地址（镜像内容一致，详见 README）：
+    #   image: docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
+    #   image: ghcr.1ms.run/m964927/send-to-kindle:latest      # 需先 docker login ghcr.1ms.run
     container_name: kindle-drop
     restart: unless-stopped
 
