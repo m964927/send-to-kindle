@@ -17,3 +17,7 @@ tools/*
 转换.bat
 README.md
 docker-compose.yml
+docker-compose.build.yml
+部署到NAS.md
+docs
+.github

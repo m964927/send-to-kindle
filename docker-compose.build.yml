@@ -1,0 +1,36 @@
+# Kindle Drop —— 源码构建文件（开发者 / 想改代码时用）
+#
+# 用法：
+#   git clone https://github.com/m964927/send-to-kindle.git && cd send-to-kindle
+#   docker compose -f docker-compose.build.yml up -d --build
+#
+# 只是想用的话不要用这个文件，直接用 docker-compose.yml 拉预构建镜像更快。
+
+services:
+  kindle-drop:
+    build:
+      context: .
+      args:
+        # 需要 epub→mobi、pdf/txt→azw3 时改成 "1"（镜像从 ~250MB 涨到 ~900MB）
+        WITH_CALIBRE: "0"
+        # NAS 拉 Docker Hub 慢时换国内镜像源（注意必须保留 trixie，不能换成 bookworm）
+        # NODE_IMAGE: docker.m.daocloud.io/library/node:22-trixie-slim
+        # npm 装依赖慢时换国内源
+        # NPM_REGISTRY: https://registry.npmmirror.com
+        # 拉不动 GitHub 时换成镜像源
+        # KINDLING_BASE: https://gh-proxy.com/https://github.com/ciscoriordan/kindling/releases/download
+    image: kindle-drop:latest
+    container_name: kindle-drop
+    restart: unless-stopped
+
+    ports:
+      - "8899:8899"
+
+    environment:
+      - TZ=Asia/Shanghai
+
+    volumes:
+      - ./data:/app/data
+
+    cpus: 2.0
+    mem_limit: 1g

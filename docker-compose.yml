@@ -1,37 +1,37 @@
+# Kindle Drop —— 部署文件（只用预构建镜像，不需要源码、不需要构建）
+#
+# 用法：
+#   1) 新建一个目录，把本文件存进去（或者直接 curl 下载）
+#   2) 同目录下会生成 data/ 存放书库
+#   3) docker compose up -d
+#   4) 浏览器打开 http://机器的IP:8899
+#
+# 升级：docker compose pull && docker compose up -d
+# 想自己改代码构建：用 docker-compose.build.yml
+
 services:
   kindle-drop:
-    build:
-      context: .
-      args:
-        # 需要 epub→mobi、pdf/txt→azw3 时改成 "1"（镜像从 ~250MB 涨到 ~900MB）
-        WITH_CALIBRE: "0"
-        # NAS 拉 Docker Hub 慢时，换国内镜像源（注意必须保留 trixie，不能换成 bookworm）
-        # NODE_IMAGE: docker.m.daocloud.io/library/node:22-trixie-slim
-        # npm 装依赖慢时，换国内源
-        # NPM_REGISTRY: https://registry.npmmirror.com
-        # 拉不动 GitHub 时，换成镜像源
-        # KINDLING_BASE: https://gh-proxy.com/https://github.com/ciscoriordan/kindling/releases/download
-    image: kindle-drop:latest
+    image: ghcr.io/m964927/send-to-kindle:latest
     container_name: kindle-drop
     restart: unless-stopped
 
     ports:
-      # 左侧是 NAS 上对外暴露的端口，被占用就改成 8900:8899
+      # 左边是宿主机端口，8899 被占用就改成 "8900:8899"
       - "8899:8899"
 
     environment:
       - TZ=Asia/Shanghai
-      # 以下都是可选项，一个都不用填：
-      # 页面地址默认跟随你浏览器访问的地址（局域网 IP、lucky 反代域名都自动正确）
-      # - PUBLIC_URL=https://kindle.example.com   # 只在想钉死对外地址时才写
-      # - AUTO_CONVERT=false
-      # - KEEP_ORIGINAL=false
-      # - KINDLING_BIN=/usr/local/bin/kindling
+      # 以下都是可选项，通常一个都不用填：
+      # - PUBLIC_URL=https://kindle.example.com   # 只在想钉死对外地址时才写，默认跟随浏览器访问地址
+      # - AUTO_CONVERT=false                       # 关闭 EPUB→AZW3 自动转换
+      # - KEEP_ORIGINAL=false                      # 转换后删除原始 EPUB
+      # - KINDLING_BIN=/usr/local/bin/kindling     # 转换引擎路径，一般不用改
 
     volumes:
-      # 书库、配置、索引都在这里，备份这个目录就等于备份整个书架
+      # 书库、配置、索引都在容器内 /app/data，挂到这里就等于备份了整个书架
+      # 群晖/飞牛一般是 /volume1/docker/kindle-drop/data 或 /vol1/1000/docker/kindle-drop/data
       - ./data:/app/data
 
-    # J1900 四核；转换是单进程的，2 核 1G 上限足够，也不会拖垮 NAS
+    # 转换是单进程的，2 核 1G 足够；J1900 级别的 NAS 也不会被拖垮
     cpus: 2.0
     mem_limit: 1g

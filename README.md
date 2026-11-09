@@ -31,25 +31,68 @@
 
 ## 快速开始
 
-### Docker（推荐）
+三种方式任选一种，都**不需要下载源码**（第三种除外）。镜像为 `linux/amd64`，ARM 设备（树莓派、部分 ARM 群晖）暂不支持——转换引擎 Kindling 只发布了 x86_64 的 Linux 版本。
+
+### 方式一：docker compose（推荐）
+
+把下面内容存成 `docker-compose.yml`，同一个目录下会自动生成 `data/` 存放书库：
+
+```yaml
+services:
+  kindle-drop:
+    image: ghcr.io/m964927/send-to-kindle:latest
+    container_name: kindle-drop
+    restart: unless-stopped
+    ports:
+      - "8899:8899"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/app/data
+    cpus: 2.0
+    mem_limit: 1g
+```
+
+然后 `docker compose up -d`，浏览器打开 `http://你的IP:8899`。
+
+嫌手写麻烦也可以直接下载这个文件：
+
+```bash
+curl -O https://raw.githubusercontent.com/m964927/send-to-kindle/main/docker-compose.yml
+docker compose up -d
+```
+
+升级到新版本：`docker compose pull && docker compose up -d`。
+
+### 方式二：一条 docker run
+
+```bash
+docker run -d --name kindle-drop --restart unless-stopped \
+  -p 8899:8899 -e TZ=Asia/Shanghai \
+  -v /volume1/docker/kindle-drop/data:/app/data \
+  ghcr.io/m964927/send-to-kindle:latest
+```
+
+把 `/volume1/docker/kindle-drop/data` 换成你自己的路径（群晖 `/volume1/...`、飞牛 `/vol1/1000/...`、Windows 用 `%USERPROFILE%\kindle-data`）。**这个目录就是书库**，删了书就没了。
+
+### 方式三：从源码构建（开发者）
 
 ```bash
 git clone https://github.com/m964927/send-to-kindle.git
 cd send-to-kindle
-docker compose up -d --build
+docker compose -f docker-compose.build.yml up -d --build
 ```
 
-首次构建 3–5 分钟（要拉基础镜像 + 下载 Kindling 转换引擎）。完成后访问 `http://你的IP:8899`。
+首次构建 3–5 分钟（拉基础镜像 + 下载 Kindling 转换引擎）。想改代码、二次开发走这条路。
 
-不想用 compose 也行：
-
-```bash
-docker build -t kindle-drop .
-docker run -d --name kindle-drop --restart unless-stopped \
-  -p 8899:8899 -e TZ=Asia/Shanghai \
-  -v "$PWD/data:/app/data" \
-  kindle-drop
-```
+> **拉不动 ghcr.io？** 国内直连经常超时，在地址前加加速前缀即可，其余部分不变：
+>
+> ```bash
+> docker pull docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
+> docker tag docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
+> ```
+>
+> compose 文件里直接把 `image:` 那一行换成带前缀的地址也行。
 
 ### 直接跑（需要 Node.js 22+）
 

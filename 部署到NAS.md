@@ -132,8 +132,14 @@ environment:
 
 ```bash
 cd /volume1/docker/kindle-drop
-docker compose up -d --build      # 老系统用 docker-compose up -d --build
+docker compose -f docker-compose.build.yml up -d --build   # 老系统用 docker-compose -f docker-compose.build.yml up -d --build
 ```
+
+> 仓库里有**两个** compose 文件，别用混了：
+> - `docker-compose.yml` —— 只拉预构建镜像，`docker compose up -d` 一条就完事，**不需要源码、不需要构建**
+> - `docker-compose.build.yml` —— 从源码构建，本文这一套流程用的就是它
+>
+> NAS 性能弱、不想等构建的话，直接用前者从 ghcr.io 拉镜像即可（见 README「快速开始」）。
 
 构建过程会做三件事，全在镜像里完成，不影响 NAS 其它服务：
 
@@ -194,7 +200,7 @@ cd /volume1/docker/kindle-drop
 docker compose logs -f --tail 100   # 看日志（上传、转换都在这里）
 docker compose restart              # 重启
 docker compose down                 # 停止并删除容器（data 目录不动）
-docker compose up -d --build        # 改完代码后重新构建
+docker compose -f docker-compose.build.yml up -d --build   # 改完代码后重新构建
 ```
 
 **开机自启**：`restart: unless-stopped` 已经写了，NAS 重启后容器会自动起来。
@@ -209,7 +215,9 @@ tar czf ~/kindle-backup-$(date +%F).tar.gz -C /volume1/docker/kindle-drop data
 
 **迁移旧书库**：把电脑上的 `data/` 目录（含 `files/` 和 `library.json`）整个拷到 NAS 的 `kindle-drop/data/`，重启容器即可，书和配置都在。
 
-**升级**：重新传一次源码文件，再 `docker compose up -d --build`；`data/` 不会被覆盖。
+**升级**（源码构建方式）：重新传一次源码文件，再 `docker compose -f docker-compose.build.yml up -d --build`；`data/` 不会被覆盖。
+
+**升级**（镜像方式）：`docker compose pull && docker compose up -d`，几十秒就完，不用在 NAS 上编译。
 
 ---
 
