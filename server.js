@@ -50,6 +50,24 @@ function titleFromName(filename) {
   return cleanName(base.replace(/[_]+/g, ' ').replace(/\s{2,}/g, ' ')) || '未命名';
 }
 
+/** 去掉盗版站挂在文件名后面的广告尾巴：(z-library.sk, 1lib.sk, z-lib.sk) */
+function stripAds(name) {
+  return String(name || '')
+    .replace(/\s*\((?:z-library|z-lib|1lib|libgen|anna'?s archive)[^)]*\)/gi, '')
+    .replace(/\s*\[(?:z-library|z-lib|1lib)[^\]]*\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * 展示用书名：优先用从书里解析出来的书名（干净、没有广告尾巴），
+ * 解析不出来才回落到上传时的文件名。
+ */
+function displayTitle(rec) {
+  const fromMeta = rec.meta && rec.meta.title;
+  return stripAds(fromMeta || rec.title) || rec.title || '未命名';
+}
+
 /* ---------------- 封面 / 元数据 ---------------- */
 
 const coverPath = (id) => path.join(COVERS_DIR, `${id}.cover`);
@@ -256,14 +274,15 @@ app.get('/k', (req, res) => {
   const q = String(req.query.q || '').trim();
   const all = store.all().filter((f) => (f.files || []).length > 0);
   const list = q
-    ? all.filter((f) => (f.title + ' ' + f.originalName).toLowerCase().includes(q.toLowerCase()))
+    ? all.filter((f) =>
+        (displayTitle(f) + ' ' + f.title + ' ' + f.originalName).toLowerCase().includes(q.toLowerCase()))
     : all;
 
   const items = list.map((rec) => {
     const best = store.pickBest(rec);
     return {
       id: rec.id,
-      title: rec.title,
+      title: displayTitle(rec),
       format: best ? best.format : rec.format,
       label: best ? (FMT_LABEL[best.format] || best.format.toUpperCase()) : '?',
       size: best ? fmtBytes(best.size) : '-',
@@ -301,7 +320,7 @@ app.get('/k/download', (req, res) => {
     if (!best) continue;
     books.push({
       id: rec.id,
-      title: rec.title,
+      title: displayTitle(rec),
       label: FMT_LABEL[best.format] || best.format.toUpperCase(),
       size: fmtBytes(best.size),
       href: downloadHref(rec, best)
@@ -358,7 +377,8 @@ app.get('/api/qr', async (req, res) => {
 app.get('/api/files', (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase();
   let list = store.all();
-  if (q) list = list.filter((f) => (f.title + ' ' + f.originalName).toLowerCase().includes(q));
+  if (q) list = list.filter((f) =>
+    (displayTitle(f) + ' ' + f.title + ' ' + f.originalName).toLowerCase().includes(q));
 
   res.json({
     files: list.map((rec) => {
@@ -629,11 +649,11 @@ app.post('/api/config', async (req, res) => {
 
 /* ---------------- 下载 ---------------- */
 
-/** 下载文件名：优先用原始书名，去掉盗版站挂在标题后面的广告尾巴，并保证带正确后缀 */
+/** 下载文件名：优先用书里的书名，去掉盗版站挂在标题后面的广告尾巴，并保证带正确后缀 */
 function buildDownloadName(entry, rec) {
   const fmt = String(entry.format || '').toLowerCase();
-  let base = String(entry.name || rec.title || 'book').trim();
-  base = base.replace(/\s*\((?:z-library|z-lib|1lib|libgen|anna'?s archive)[^)]*\)/gi, '');
+  const fromMeta = rec.meta && rec.meta.title;
+  let base = stripAds(fromMeta || entry.name || rec.title || 'book');
   base = base.replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (fmt && !base.toLowerCase().endsWith(`.${fmt}`)) {
     base = base.replace(/\.[a-z0-9]{2,5}$/i, '') + `.${fmt}`;

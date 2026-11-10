@@ -90,21 +90,14 @@ docker compose -f docker-compose.build.yml up -d --build
 
 ### 拉不动 ghcr.io？换地址
 
-镜像同时发布在两个仓库，内容完全一样，哪个快用哪个：
+镜像发布在 **ghcr.io**，公开、免登录。国内直连经常卡住，按下面顺序换前缀试，拉下来 retag 一下，原来的命令照旧能用：
 
-| 仓库 | 地址 |
-|---|---|
-| GitHub Container Registry | `ghcr.io/m964927/send-to-kindle:latest` |
-| Docker Hub | `docker.io/song19615/send-to-kindle:latest`（可简写 `song19615/send-to-kindle`） |
-
-两个都是公开镜像，不需要登录。国内访问 Docker Hub 通常比 ghcr.io 顺畅，先用它试：
+**免注册的公共前缀**（速度不保证，能用就行）：
 
 ```bash
-docker pull docker.io/song19615/send-to-kindle:latest
-docker tag  docker.io/song19615/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
+docker pull docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
+docker tag  docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
 ```
-
-都不行就用下面的加速前缀，retag 之后原来的命令照旧能用。
 
 **毫秒镜像（1ms.run）**：需要在 [1ms.run](https://1ms.run/) 注册并创建 Docker 密钥，免费额度就够用。
 
@@ -114,12 +107,7 @@ docker pull ghcr.1ms.run/m964927/send-to-kindle:latest
 docker tag  ghcr.1ms.run/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
 ```
 
-**免注册的公共前缀**（速度不保证，能用就行）：
-
-```bash
-docker pull docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
-docker tag  docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
-```
+**Docker Hub 备用**：`song19615/send-to-kindle:latest`。只有仓库里配了 `DOCKERHUB_TOKEN` 时 CI 才会同步过去，否则那边是旧版本——拉之前先确认 tag 的更新时间。
 
 compose 文件里也可以直接把 `image:` 换成加速地址，不写 tag 默认就是 `latest`。
 

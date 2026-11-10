@@ -72,29 +72,14 @@ docker compose up -d
 
 ### 拉不动 ghcr.io 怎么办
 
-镜像同时发布在两处，内容完全一致，哪个快用哪个：
-
-| 仓库 | 地址 |
-| --- | --- |
-| GitHub Container Registry | `ghcr.io/m964927/send-to-kindle:latest` |
-| Docker Hub | `docker.io/song19615/send-to-kindle:latest` |
-
-两个都是公开镜像，**不用登录**。国内访问 Docker Hub 通常比 ghcr.io 顺畅，先试它：
+镜像主发布在 **ghcr.io**，公开、免登录。按顺序换前缀试，拉下来 retag 一下，compose 文件不用改：
 
 ```bash
-docker pull song19615/send-to-kindle:latest
-docker tag  song19615/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
-docker compose up -d
-```
-
-都不行就用加速前缀（拉下来 retag 成上面那个名字，compose 文件不用改）：
-
-```bash
-# 免注册的公共前缀
+# 1) 免注册的公共前缀
 docker pull docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
 docker tag  docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
 
-# 或者毫秒镜像：需要先在 1ms.run 注册拿一个 mk- 开头的密钥，登录一次
+# 2) 或者毫秒镜像：需要先在 1ms.run 注册拿一个 mk- 开头的密钥，登录一次
 docker login ghcr.1ms.run -u 1ms
 docker pull ghcr.1ms.run/m964927/send-to-kindle:latest
 docker tag  ghcr.1ms.run/m964927/send-to-kindle:latest ghcr.io/m964927/send-to-kindle:latest
@@ -107,6 +92,8 @@ docker compose up -d
 ```yaml
     image: docker.m.daocloud.io/ghcr.io/m964927/send-to-kindle:latest
 ```
+
+> Docker Hub 上也有 `song19615/send-to-kindle:latest`，但仓库没配 `DOCKERHUB_TOKEN` 时 CI 不同步，那边可能是旧版本，用之前先看更新时间。
 
 ### 确认起来了
 
