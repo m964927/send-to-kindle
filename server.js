@@ -6,13 +6,14 @@ import crypto from 'node:crypto';
 import { Transform } from 'node:stream';
 import QRCode from 'qrcode';
 import {
-  loadConfig, saveConfig, PUBLIC_DIR, FILES_DIR, TMP_DIR,
+  loadConfig, saveConfig, PUBLIC_DIR, FILES_DIR, TMP_DIR, COVERS_DIR,
   SUPPORTED_INPUT, CONTENT_TYPES, NEEDS_CONVERT
 } from './lib/config.js';
 import * as store from './lib/store.js';
+import { extractMeta, sniffImage } from './lib/cover.js';
 import { detectEngine, resetDetection, convert, hostInfo } from './lib/converter.js';
 import { detectPrimaryIps, getPreferred } from './lib/net.js';
-import { renderKindlePage, renderDownloadQueue } from './lib/kindle.js';
+import { renderKindlePage, renderDownloadQueue, renderSizePage } from './lib/kindle.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || loadConfig().port || 8899);
@@ -47,6 +48,86 @@ function cleanName(name) {
 function titleFromName(filename) {
   const base = filename.replace(/\.[^.]+$/, '');
   return cleanName(base.replace(/[_]+/g, ' ').replace(/\s{2,}/g, ' ')) || '未命名';
+}
+
+/* ---------------- 封面 / 元数据 ---------------- */
+
+const coverPath = (id) => path.join(COVERS_DIR, `${id}.cover`);
+
+// AZW3 里的封面图是转换时重新压过的，通常只有几十 KB；EPUB 原图动辄几百 KB。
+// 缩略图用前者更省流量，所以优先问 AZW3，抠不到再回落到 EPUB 原图。
+const META_PRIORITY = ['azw3', 'azw', 'mobi', 'epub'];
+
+/** 从这本书现有的文件里抠书名/作者/封面，结果写进 library.json 并落一张封面图 */
+function buildMeta(rec) {
+  const files = rec.files || [];
+  let title = '';
+  let author = '';
+  let cover = null;
+
+  for (const fmt of META_PRIORITY) {
+    const entry = files.find((f) => f.format === fmt);
+    if (!entry) continue;
+    const full = path.join(FILES_DIR, entry.disk);
+    if (!fs.existsSync(full)) continue;
+
+    const got = extractMeta(full, fmt);
+    if (!title && got.title) title = got.title;
+    if (!author && got.author) author = got.author;
+    if (!cover && got.cover) cover = got.cover;
+    if (title && author && cover) break;
+  }
+
+  // 元数据里的书名常常有全角括号、换行，压一压再存
+  title = cleanName(title).slice(0, 120);
+  author = cleanName(author).slice(0, 80);
+
+  const meta = {
+    title,
+    author,
+    cover: !!cover,
+    at: Date.now()
+  };
+
+  try {
+    if (cover) {
+      fs.writeFileSync(coverPath(rec.id), cover.buffer);
+    } else {
+      try { fs.unlinkSync(coverPath(rec.id)); } catch {}
+    }
+  } catch (e) {
+    console.error(`[封面] ${rec.title} 写入失败：${e.message}`);
+    meta.cover = false;
+  }
+
+  store.update(rec.id, { meta, coverVer: Date.now() });
+  return meta;
+}
+
+// 抠封面要整个读进内存，几十本书同时干会把事件循环堵住，这里排成一条队
+let metaQueue = Promise.resolve();
+
+function ensureMeta(rec, force = false) {
+  if (!rec) return Promise.resolve(null);
+  if (!force && rec.meta) return Promise.resolve(rec.meta);
+  metaQueue = metaQueue.then(
+    () =>
+      new Promise((resolve) => {
+        setImmediate(() => {
+          try {
+            resolve(buildMeta(store.get(rec.id) || rec));
+          } catch {
+            resolve(null);
+          }
+        });
+      })
+  );
+  return metaQueue;
+}
+
+function coverUrl(rec) {
+  if (!rec || !rec.meta || !rec.meta.cover) return '';
+  return `/api/files/${rec.id}/cover?v=${rec.coverVer || 0}`;
 }
 
 function localUrls() {
@@ -154,6 +235,8 @@ async function pump() {
         }
       }
       console.log(`[转换完成] ${fresh.title} → ${job.targetFormat} (${fmtBytes(result.size)})`);
+      // 转换出来的 AZW3 往往带着更规整的封面，重新抠一次
+      ensureMeta(store.get(job.id), true).catch(() => {});
     } catch (err) {
       console.error(`[转换失败] ${rec.title}: ${err.message}`);
       store.update(job.id, { status: 'failed', error: err.message, progress: 0 });
@@ -184,7 +267,7 @@ app.get('/k', (req, res) => {
       format: best ? best.format : rec.format,
       label: best ? (FMT_LABEL[best.format] || best.format.toUpperCase()) : '?',
       size: best ? fmtBytes(best.size) : '-',
-      href: `/d/${rec.id}`,
+      href: downloadHref(rec, best),
       needConvert: best ? !['mobi', 'azw3', 'azw', 'pdf', 'txt'].includes(best.format) : true,
       converting: rec.status === 'converting',
       selectable: rec.status !== 'converting'
@@ -196,6 +279,12 @@ app.get('/k', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.send(renderKindlePage({ items, total: all.length, q, msg }));
+});
+
+app.get('/k/size', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(renderSizePage());
 });
 
 // 批量下载：勾选多本 → 中间页依次触发；只勾一本就直接下载
@@ -215,7 +304,7 @@ app.get('/k/download', (req, res) => {
       title: rec.title,
       label: FMT_LABEL[best.format] || best.format.toUpperCase(),
       size: fmtBytes(best.size),
-      href: `/d/${rec.id}`
+      href: downloadHref(rec, best)
     });
   }
 
@@ -277,6 +366,11 @@ app.get('/api/files', (req, res) => {
       return {
         id: rec.id,
         title: rec.title,
+        // 从书里读出来的真实书名和作者，封面视图用这两个（行视图继续用文件名标题）
+        bookTitle: (rec.meta && rec.meta.title) || '',
+        author: (rec.meta && rec.meta.author) || '',
+        cover: !!(rec.meta && rec.meta.cover),
+        coverUrl: coverUrl(rec),
         originalName: rec.originalName,
         size: best ? best.size : rec.size,
         sizeLabel: fmtBytes(best ? best.size : rec.size),
@@ -285,17 +379,42 @@ app.get('/api/files', (req, res) => {
           format: f.format,
           label: FMT_LABEL[f.format] || f.format.toUpperCase(),
           sizeLabel: fmtBytes(f.size),
-          href: `/d/${rec.id}/${f.format}`
+          href: downloadHref(rec, f)
         })),
         status: rec.status || 'ready',
         progress: rec.progress || 0,
         error: rec.error || null,
         createdAt: rec.createdAt,
-        href: `/d/${rec.id}`,
+        href: downloadHref(rec, best),
         kindleReady: best ? ['mobi', 'azw3', 'azw', 'pdf', 'txt'].includes(best.format) : false
       };
     })
   });
+});
+
+app.get('/api/files/:id/cover', (req, res) => {
+  const rec = store.get(req.params.id);
+  if (!rec) return res.status(404).end();
+
+  let buf = null;
+  try {
+    buf = fs.readFileSync(coverPath(rec.id));
+  } catch {}
+
+  // 老数据还没抠过封面：现场抠一次，之后就有缓存文件了
+  if (!buf && !rec.meta) {
+    try { buildMeta(rec); } catch {}
+    try { buf = fs.readFileSync(coverPath(rec.id)); } catch {}
+  }
+
+  if (!buf || !buf.length) return res.status(404).end();
+
+  const ext = sniffImage(buf) || 'jpg';
+  res.setHeader('Content-Type', ext === 'jpg' ? 'image/jpeg' : `image/${ext}`);
+  res.setHeader('Content-Length', buf.length);
+  // 文件名带 ?v=，内容变了 URL 就变了，可以放心长缓存
+  res.setHeader('Cache-Control', 'public, max-age=604800');
+  res.end(buf);
 });
 
 app.post('/api/upload', (req, res) => {
@@ -406,6 +525,8 @@ app.post('/api/upload', (req, res) => {
 
           store.add(rec);
           created.push(rec);
+          // 封面/元数据和转换互不干扰，后台慢慢抠，别拖慢响应
+          ensureMeta(rec).catch(() => {});
         } catch (e) {
           errors.push(`${originalName}：${e.message}`);
         }
@@ -477,6 +598,7 @@ app.delete('/api/files/:id', (req, res) => {
   for (const f of rec.files || []) {
     try { fs.unlinkSync(path.join(FILES_DIR, f.disk)); } catch {}
   }
+  try { fs.unlinkSync(coverPath(rec.id)); } catch {}
   res.json({ ok: true });
 });
 
@@ -520,6 +642,31 @@ function buildDownloadName(entry, rec) {
 }
 
 /**
+ * Kindle 的实验性浏览器基本不看 Content-Disposition，它靠 **URL 末尾的扩展名**
+ * 判断「这是不是一本可下载的书」。所以 /d/<id> 这种无后缀地址在 Kindle 上会被当成
+ * 网页、直接拒绝下载；正确形态必须是 /d/<id>/书名.azw3。
+ * 这里顺带把真实书名放进路径里，即使响应头被忽略，存下来的文件名也是可读的。
+ */
+function downloadHref(rec, entry) {
+  if (!entry) return `/d/${rec.id}`;
+  const name = buildDownloadName(entry, rec);
+  return `/d/${rec.id}/${encodeURIComponent(name)}`;
+}
+
+/** 从 /d/<id>/<whatever> 的最后一段里提取格式：'书名.azw3' / 'azw3' 都认 */
+const KINDLE_EXTS = new Set([
+  'azw3', 'azw', 'mobi', 'prc', 'epub', 'pdf', 'txt', 'doc', 'docx', 'rtf', 'fb2', 'cbz'
+]);
+
+function extFromSegment(seg) {
+  if (!seg) return null;
+  const s = String(seg).toLowerCase().trim();
+  const dot = s.lastIndexOf('.');
+  const ext = dot > -1 ? s.slice(dot + 1) : s;
+  return KINDLE_EXTS.has(ext) ? ext : null;
+}
+
+/**
  * Content-Disposition 的 filename= 只放 ASCII。旧版 Kindle 浏览器不认 RFC 5987 的
  * filename*，如果这里塞一堆下划线，存盘后就成了 ____.azw3；实在提不出可读名字时
  * 用 book-<id>，至少文件名合法、后缀正确。
@@ -538,13 +685,15 @@ function toAsciiFilename(name, id) {
   return `${ascii}${ext}`;
 }
 
-app.get('/d/:id/:fmt?', (req, res) => {
+app.get('/d/:id/:name?', (req, res) => {
   const rec = store.get(req.params.id);
   if (!rec) return res.status(404).send('文件不存在');
 
   const files = rec.files || [];
-  const entry = req.params.fmt
-    ? files.find((f) => f.format === String(req.params.fmt).toLowerCase())
+  // 路径最后一段可以是「书名.azw3」，也可以是老式的「azw3」；提不出格式就发最佳版本
+  const wanted = extFromSegment(req.params.name);
+  const entry = wanted
+    ? files.find((f) => f.format === wanted)
     : store.pickBest(rec);
 
   if (!entry) return res.status(404).send('没有可下载的版本');
@@ -620,6 +769,19 @@ async function backfillHashes() {
   }
 }
 
+/* 老版本的书没有封面/作者，启动后排队补一遍，不阻塞服务 */
+async function backfillMeta() {
+  const missing = store.all().filter((f) => !f.meta && (f.files || []).length);
+  let ok = 0;
+  for (const rec of missing) {
+    const meta = await ensureMeta(rec);
+    if (meta && (meta.cover || meta.author)) ok++;
+  }
+  if (missing.length) {
+    console.log(`  书库           已为 ${missing.length} 本旧书提取封面与作者（${ok} 本有封面）`);
+  }
+}
+
 async function onListen() {
   // 上次退出时卡在“转换中”的记录，重启后重置为待转换
   for (const f of store.all()) {
@@ -656,6 +818,7 @@ async function onListen() {
 
   // 后台给旧书补指纹，不阻塞启动
   backfillHashes().catch(() => {});
+  backfillMeta().catch(() => {});
 
   // PowerShell 首次启动偶尔会超时（杀软扫描等），失败就在后台补一次，
   // 之后的请求就能拿到正确的网卡地址

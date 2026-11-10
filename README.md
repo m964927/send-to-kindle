@@ -4,7 +4,7 @@
 
 自托管的电子书投递站，一个 Docker 容器跑起来。不上传云端、不绑定账号、不需要数据线。
 
-[English](#english) · [部署到 NAS](部署到NAS.md)
+[English](#english) · [部署到 NAS（不用构建）](部署到NAS.md)
 
 <img src="docs/screenshot-upload.png" width="720" alt="上传页">
 <img src="docs/screenshot-shelf.png" width="400" alt="Kindle 书架">
@@ -23,6 +23,7 @@
 | | |
 |---|---|
 | **上传端 `/`** | 拖拽 / 多选上传、单文件进度条、书库管理、二维码扫码在手机上传 |
+| **书库双视图** | 行视图看状态，封面视图把书架排成一本本的书；封面、书名、作者直接从 EPUB/AZW3 里解析，零第三方依赖 |
 | **接收端 `/k`** | 零 JS 服务端渲染，大字号大按钮，按书名搜索，勾选多本批量下载 |
 | **格式转换** | EPUB → AZW3 自动转换（Kindling 引擎，17MB 单文件，不需要装 570MB 的 Calibre） |
 | **去重** | 按文件内容 sha256 判重，同一本书重复上传自动跳过 |
@@ -32,6 +33,8 @@
 ## 快速开始
 
 三种方式任选一种，都**不需要下载源码**（第三种除外）。镜像为 `linux/amd64`，压缩后约 88MB、展开约 240MB；ARM 设备（树莓派、部分 ARM 群晖）暂不支持——转换引擎 Kindling 只发布了 x86_64 的 Linux 版本。
+
+镜像由 GitHub Actions 在每次提交后自动构建并推送到 ghcr.io，构建过程中会真转一本样本书做自检，所以 `:latest` 永远对应仓库里的最新代码。**升级只需要 `docker compose pull && docker compose up -d`**。
 
 ### 方式一：docker compose（推荐）
 
@@ -144,7 +147,7 @@ npm start
 
 其他项（`maxFileSizeMB` 等）在 `data/config.json` 里改，改完重启生效。
 
-数据全部在 `data/` 一个目录里：`library.json` 是索引，`files/` 是文件。备份它就等于备份整个书架。
+数据全部在 `data/` 一个目录里：`library.json` 是索引，`files/` 是电子书，`covers/` 是抠出来的封面。备份它就等于备份整个书架。
 
 ## 使用流程
 
@@ -174,6 +177,7 @@ npm start
 | Kindle 书架里显示灰色占位、没有封面 | AZW3 缺少 `EXTH 501`（CDE Type=EBOK）与 `EXTH 113`（ASIN），固件因此不建封面缓存。转换时已带 `--doc-type ebok`；老书记录点列表里的 `↻` 重新转一次即可 |
 | ARM 机器（树莓派等） | Kindling 没有 ARM 版，改用 `--build-arg WITH_CALIBRE=1` 走 Calibre（镜像涨到约 900MB） |
 | 端口被占用 | compose 里把 `8899:8899` 改成 `8900:8899` |
+| `pull` 下来还是旧版 | `docker compose up -d` 不会自动拉新镜像，必须先 `docker compose pull`；本地已缓存旧 `:latest` 时先 `docker rmi` 再拉 |
 
 更多（NAS 部署细节、lucky 反代、排错表）见 [部署到NAS.md](部署到NAS.md)。
 
@@ -187,8 +191,10 @@ npm start
 └──────────┘               │  ├ sha256 去重        │                    │
                            │  ├ Kindling 转 AZW3   │   点「下载」        │
                            │  └ data/ 落盘         │ ◄──────────────────┘
-                           └──────────────────────┘   /d/:id 流式返回
+                           └──────────────────────┘   /d/:id/书名.azw3 流式返回
 ```
+
+- 下载地址必须以扩展名收尾（`/d/58e9c3c416/乡土中国.azw3`）：Kindle 的实验性浏览器靠 URL 后缀判断文件类型，无后缀的地址会被它当成网页拒绝下载
 
 - 没有数据库：`data/library.json` 存索引，`data/files/` 存文件
 - 转换是串行队列，一次一本，不会把 CPU 占满
@@ -201,6 +207,7 @@ server.js          路由、上传、下载、转换队列
 lib/config.js      配置与路径
 lib/store.js       书库索引（JSON）
 lib/converter.js   转换引擎探测与调用
+lib/cover.js       从 EPUB(ZIP/OPF) 与 AZW3(PalmDB/EXTH) 里抠封面和书名作者
 lib/kindle.js      Kindle 端页面渲染（零 JS）
 lib/net.js         局域网地址探测
 public/            上传页（单文件，无构建步骤）

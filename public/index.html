@@ -192,6 +192,7 @@
 
   /* ---------- 书库 ---------- */
   .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+  .lib-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .lib-head h2 { font-size: 15px; display: flex; align-items: center; gap: 8px; }
   .pill { background: #f1efe9; color: #55565e; font-size: 12px; padding: 1px 8px; border-radius: 999px; font-weight: 500; }
   .search-wrap { position: relative; }
@@ -212,6 +213,79 @@
     padding: 13px 2px; border-bottom: 1px solid var(--line);
   }
   .row:last-child { border-bottom: none; }
+
+  /* ---------- 封面视图 ---------- */
+  .view-switch {
+    display: inline-flex; border: 1px solid var(--line); border-radius: 9px;
+    overflow: hidden; background: #fff;
+  }
+  .view-switch button {
+    border: 0; background: transparent; padding: 7px 11px;
+    font-size: 12.5px; color: var(--muted); cursor: pointer; line-height: 1.2;
+  }
+  .view-switch button + button { border-left: 1px solid var(--line); }
+  .view-switch button.on { background: var(--ink); color: #fff; }
+
+  .covers {
+    margin-top: 16px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 22px 18px;
+  }
+  .bk { position: relative; }
+  .bk-cover {
+    display: block; position: relative; padding-top: 150%; /* 2:3 书比例 */
+    border-radius: 9px; overflow: hidden; background: #f1efe9;
+    border: 1px solid var(--line); text-decoration: none;
+    box-shadow: 0 1px 2px rgba(23,24,28,.05);
+    transition: box-shadow .16s, transform .16s;
+  }
+  a.bk-cover:hover { box-shadow: 0 6px 16px rgba(23,24,28,.14); transform: translateY(-2px); }
+  .bk-cover img {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  /* 没封面：用格式色块顶上，别留一片空白 */
+  .bk-cover .ph {
+    position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; padding: 12px; text-align: center;
+    background: linear-gradient(160deg, #f4f2ec, #e9e5dc);
+  }
+  .bk-cover .ph b {
+    font-size: 11px; letter-spacing: .08em; font-weight: 700;
+    color: #6d6e78; background: #fff; border-radius: 5px; padding: 3px 7px;
+  }
+  .bk-cover .ph i {
+    font-style: normal; font-size: 12px; color: var(--faint); line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .bk-badge {
+    position: absolute; left: 7px; bottom: 7px; right: 7px;
+    font-size: 11px; line-height: 1.3; padding: 3px 6px; border-radius: 5px;
+    background: rgba(255,255,255,.94); color: var(--muted); text-align: center;
+  }
+  .bk-badge.ok { color: var(--accent); }
+  .bk-badge.warn { color: var(--warn); }
+  .bk-x {
+    position: absolute; right: 6px; top: 6px; width: 24px; height: 24px;
+    border: 0; border-radius: 50%; background: rgba(23,24,28,.62); color: #fff;
+    font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+    opacity: 0; transition: opacity .16s;
+  }
+  .bk:hover .bk-x { opacity: 1; }
+  @media (hover: none) { .bk-x { opacity: .9; } }
+
+  .bk-title {
+    margin-top: 9px; font-size: 13px; font-weight: 550; line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; word-break: break-word;
+  }
+  .bk-author {
+    margin-top: 3px; font-size: 12px; color: var(--faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .bk-act { margin-top: 7px; }
+  .bk-act .btn { width: 100%; justify-content: center; padding: 5px 0; font-size: 11.5px; }
   .fmt {
     flex: none; width: 52px; height: 38px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
@@ -349,9 +423,18 @@
   <section class="card section-gap">
     <div class="lib-head">
       <h2>书库 <span class="pill" id="count">0</span></h2>
-      <div class="search-wrap"><input id="search" type="search" placeholder="搜索书名或文件名"></div>
+      <div class="lib-tools">
+        <div class="view-switch" id="viewSwitch">
+          <button type="button" data-view="list" class="on">行视图</button>
+          <button type="button" data-view="grid">封面视图</button>
+        </div>
+        <div class="search-wrap"><input id="search" type="search" placeholder="搜索书名或文件名"></div>
+      </div>
     </div>
-    <div class="list" id="list"></div>
+    <div id="shelf">
+      <div class="list" id="list"></div>
+      <div class="covers" id="covers" style="display:none"></div>
+    </div>
   </section>
 </div>
 
@@ -474,16 +557,28 @@
   function render() {
     var q = state.query.trim().toLowerCase();
     var list = state.files.filter(function (f) {
-      return !q || (f.title + ' ' + f.originalName).toLowerCase().indexOf(q) !== -1;
+      return !q || (f.title + ' ' + (f.bookTitle || '') + ' ' + (f.author || '') + ' ' + f.originalName)
+        .toLowerCase().indexOf(q) !== -1;
     });
     $('count').textContent = state.files.length;
 
+    var grid = state.view === 'grid';
+    $('list').style.display = grid ? 'none' : '';
+    $('covers').style.display = grid ? '' : 'none';
+
     if (!list.length) {
-      $('list').innerHTML = '<div class="empty-state">' +
+      var empty = '<div class="empty-state">' +
         (state.files.length ? '没有匹配的书' : '还没有上传任何电子书') + '</div>';
+      $('list').innerHTML = empty;
+      $('covers').innerHTML = empty;
       return;
     }
 
+    renderList(list);
+    renderGrid(list);
+  }
+
+  function renderList(list) {
     $('list').innerHTML = list.map(function (f) {
       var cls = FMT_CLASS[f.format] || '';
       var label = (f.format || '').toUpperCase();
@@ -531,6 +626,56 @@
         '<div class="acts">' + actions + '</div>' +
       '</div>';
     }).join('');
+  }
+
+  /* 封面视图：一本一本的书，标题两行、作者一行，都取自书里的元数据 */
+  function renderGrid(list) {
+    $('covers').innerHTML = list.map(function (f) {
+      var converting = f.status === 'converting';
+      var failed = f.status === 'failed';
+      var pending = f.status === 'pending';
+      var label = (f.format || '?').toUpperCase();
+      var title = f.bookTitle || f.title;
+      var author = f.author || '';
+
+      var badge = '';
+      if (converting) badge = '<span class="bk-badge warn">转换中 ' + (f.progress || 0) + '%</span>';
+      else if (failed) badge = '<span class="bk-badge warn">转换失败</span>';
+      else if (pending) badge = '<span class="bk-badge warn">待转换</span>';
+
+      // 占位层永远垫在下面：封面图 404 时把 img 藏掉就自动露出占位，不用额外判断
+      var inner =
+        '<div class="ph"><b>' + esc(label) + '</b><i>' + esc(title) + '</i></div>' +
+        (f.coverUrl ? '<img src="' + f.coverUrl + '" alt="' + esc(title) + '" loading="lazy">' : '') +
+        badge;
+
+      var cover = (converting || failed || pending)
+        ? '<div class="bk-cover">' + inner + '</div>'
+        : '<a class="bk-cover" href="' + f.href + '" download title="下载到 Kindle">' + inner + '</a>';
+
+      var act = '';
+      if (failed || pending) {
+        act = '<div class="bk-act"><button class="btn ghost small" data-convert="' + f.id + '">转 AZW3</button></div>';
+      }
+
+      return '<div class="bk">' +
+        cover +
+        '<button class="bk-x" data-del="' + f.id + '" title="删除">×</button>' +
+        '<div class="bk-title" title="' + esc(f.originalName) + '">' + esc(title) + '</div>' +
+        '<div class="bk-author">' + esc(author || '未知作者') + '</div>' +
+        act +
+      '</div>';
+    }).join('');
+  }
+
+  function setView(v) {
+    state.view = v === 'grid' ? 'grid' : 'list';
+    try { localStorage.setItem('kindle-view', state.view); } catch (e) {}
+    var btns = $('viewSwitch').getElementsByTagName('button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].className = btns[i].getAttribute('data-view') === state.view ? 'on' : '';
+    }
+    render();
   }
 
   /* ---------- 上传 ---------- */
@@ -609,6 +754,8 @@
     chain.then(function () {
       return loadFiles();
     }).then(function (files) {
+      // 封面是服务端异步抠的，稍等一下再刷一次
+      setTimeout(function () { loadFiles(); }, 1500);
       if (files.some(function (f) { return f.status === 'converting'; })) {
         toast('已上传，正在转换格式…');
         startPolling();
@@ -665,7 +812,20 @@
     render();
   });
 
-  $('list').addEventListener('click', function (e) {
+  $('viewSwitch').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-view]');
+    if (b) setView(b.getAttribute('data-view'));
+  });
+
+  // 封面图加载失败（老数据还没抠出来 / 文件丢了）就把 img 藏掉，露出底下垫的占位块
+  $('shelf').addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.tagName === 'IMG' && t.parentNode && /bk-cover/.test(t.parentNode.className)) {
+      t.style.display = 'none';
+    }
+  }, true);
+
+  $('shelf').addEventListener('click', function (e) {
     var del = e.target.closest('[data-del]');
     var conv = e.target.closest('[data-convert]');
 
@@ -740,9 +900,19 @@
   });
 
   /* ---------- 初始化 ---------- */
+  try { state.view = localStorage.getItem('kindle-view') === 'grid' ? 'grid' : 'list'; } catch (e) {}
+  // 允许 ?view=grid 直接开封面视图，方便收藏/分享
+  var vm = /[?&]view=(grid|list)\b/.exec(location.search);
+  if (vm) state.view = vm[1];
+  setView(state.view);
+
   loadInfo().catch(function () { toast('无法连接服务', true); });
   loadFiles().then(function (files) {
     if (files.some(function (f) { return f.status === 'converting'; })) startPolling();
+    // 老数据的封面是启动后后台慢慢抠的，稍后再刷一次把图补上
+    if (files.some(function (f) { return !f.coverUrl && /epub|mobi|azw3|azw/.test(f.format); })) {
+      setTimeout(function () { loadFiles(); }, 1800);
+    }
   });
 })();
 </script>
