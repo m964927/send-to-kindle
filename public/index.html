@@ -187,6 +187,8 @@
     font-size: 12.5px; cursor: pointer; padding: 5px 7px; border-radius: 7px;
   }
   .icon-btn:hover { background: #f4f2ed; color: var(--danger); }
+  .icon-btn.reconv { font-size: 16px; line-height: 1; padding: 3px 7px 5px; color: var(--muted); }
+  .icon-btn.reconv:hover { color: #1f5f4b; }
 
   /* ---------- 书库 ---------- */
   .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
@@ -515,7 +517,7 @@
       } else {
         actions = '<a class="btn ghost small" href="' + f.href + '" download>' +
                     '<span class="dl-text">下载</span><span aria-hidden="true">↓</span></a>' +
-                  '<button class="icon-btn" data-convert="' + f.id + '" title="重新转换">&#8635;</button>' +
+                  '<button class="icon-btn reconv" data-convert="' + f.id + '" title="重新转换">&#8635;</button>' +
                   '<button class="icon-btn" data-del="' + f.id + '" title="删除">删除</button>';
       }
 
