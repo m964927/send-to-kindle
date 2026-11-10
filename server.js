@@ -507,6 +507,37 @@ app.post('/api/config', async (req, res) => {
 
 /* ---------------- 下载 ---------------- */
 
+/** 下载文件名：优先用原始书名，去掉盗版站挂在标题后面的广告尾巴，并保证带正确后缀 */
+function buildDownloadName(entry, rec) {
+  const fmt = String(entry.format || '').toLowerCase();
+  let base = String(entry.name || rec.title || 'book').trim();
+  base = base.replace(/\s*\((?:z-library|z-lib|1lib|libgen|anna'?s archive)[^)]*\)/gi, '');
+  base = base.replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (fmt && !base.toLowerCase().endsWith(`.${fmt}`)) {
+    base = base.replace(/\.[a-z0-9]{2,5}$/i, '') + `.${fmt}`;
+  }
+  return base || `book.${fmt || 'bin'}`;
+}
+
+/**
+ * Content-Disposition 的 filename= 只放 ASCII。旧版 Kindle 浏览器不认 RFC 5987 的
+ * filename*，如果这里塞一堆下划线，存盘后就成了 ____.azw3；实在提不出可读名字时
+ * 用 book-<id>，至少文件名合法、后缀正确。
+ */
+function toAsciiFilename(name, id) {
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  const ascii = stem
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/["\\]/g, '')
+    .replace(/[^\w\-. ()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!/[A-Za-z0-9]/.test(ascii)) return `book-${id}${ext}`;
+  return `${ascii}${ext}`;
+}
+
 app.get('/d/:id/:fmt?', (req, res) => {
   const rec = store.get(req.params.id);
   if (!rec) return res.status(404).send('文件不存在');
@@ -526,10 +557,13 @@ app.get('/d/:id/:fmt?', (req, res) => {
     return res.status(410).send('文件已从服务器删除');
   }
 
-  const filename = entry.name || `${rec.title}.${entry.format}`;
-  const ascii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'");
+  // Kindle 的实验性浏览器对 MIME 很敏感：给 application/vnd.amazon.ebook 它会尝试
+  // 走书籍查看器，稍不合规就弹「文件类型无效」；一律给 octet-stream 反而稳定，
+  // 它会把整个响应当二进制流存盘，再靠 .azw3 后缀识别成书。
+  const filename = buildDownloadName(entry, rec);
+  const ascii = toAsciiFilename(filename, rec.id);
 
-  res.setHeader('Content-Type', CONTENT_TYPES[entry.format] || 'application/octet-stream');
+  res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader(
     'Content-Disposition',
     `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
@@ -537,6 +571,8 @@ app.get('/d/:id/:fmt?', (req, res) => {
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Length', stat.size);
   res.setHeader('Cache-Control', 'no-store');
+  // 老 WebKit 下载大文件时复用连接容易半路断，明确关掉 keep-alive
+  res.setHeader('Connection', 'close');
 
   const range = req.headers.range;
   if (range) {

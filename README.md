@@ -171,6 +171,7 @@ npm start
 | `npm ERR! network` | 加 `NPM_REGISTRY=https://registry.npmmirror.com` |
 | 上传后一直「转换中」 | 容器里没有转换引擎，`docker compose logs` 看报错 |
 | Kindle 下载完在图书馆找不到 | 切到 Kindle 首页的「下载 / 已下载」分类 |
+| Kindle 书架里显示灰色占位、没有封面 | AZW3 缺少 `EXTH 501`（CDE Type=EBOK）与 `EXTH 113`（ASIN），固件因此不建封面缓存。转换时已带 `--doc-type ebok`；老书记录点列表里的 `↻` 重新转一次即可 |
 | ARM 机器（树莓派等） | Kindling 没有 ARM 版，改用 `--build-arg WITH_CALIBRE=1` 走 Calibre（镜像涨到约 900MB） |
 | 端口被占用 | compose 里把 `8899:8899` 改成 `8900:8899` |
 
