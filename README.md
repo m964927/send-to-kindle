@@ -4,7 +4,7 @@
 
 自托管的电子书投递站，一个 Docker 容器跑起来。不上传云端、不绑定账号、不需要数据线。
 
-[English](#english) · [部署到 NAS（不用构建）](部署到NAS.md)
+[English](#english) · [部署到 NAS（不用构建）](部署到NAS.md) · [开发历程与踩坑记录](开发历程.md)
 
 <img src="docs/screenshot-upload.png" width="720" alt="上传页">
 <img src="docs/screenshot-shelf.png" width="400" alt="Kindle 书架">
@@ -168,6 +168,7 @@ npm start
 | `pull` 下来还是旧版 | `docker compose up -d` 不会自动拉新镜像，必须先 `docker compose pull`；本地已缓存旧 `:latest` 时先 `docker rmi` 再拉 |
 
 更多（NAS 部署细节、lucky 反代、排错表）见 [部署到NAS.md](部署到NAS.md)。
+项目是怎么一步步做出来的、踩过哪些坑，见 [开发历程.md](开发历程.md)。
 
 ## 工作原理
 
